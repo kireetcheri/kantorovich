@@ -1,0 +1,51 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust-tests:
+    name: Rust tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --release
+
+  python-tests:
+    name: Python smoke test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install maturin numpy
+      - run: maturin develop --release
+      - name: Smoke test
+        run: |
+          python -c "
+          import kantorovich as kt
+          import numpy as np
+          np.random.seed(42)
+          n = 50
+          x, y = np.random.randn(n, 3), np.random.randn(n, 3)
+          a, b = np.ones(n)/n, np.ones(n)/n
+          M = kt.cost_matrix(x, y)
+          r = kt.sinkhorn_solve(a, b, M, reg=1.0)
+          assert r['cost'] > 0
+          d = kt.emd_1d(np.array([0.,1.]), np.array([.5,.5]), np.array([2.,3.]), np.array([.5,.5]))
+          assert d > 0
+          sw = kt.sliced_wasserstein_solve(x, y, a, b, n_projections=10)
+          assert sw > 0
+          print('All smoke tests passed.')
+          "
